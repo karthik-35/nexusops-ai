@@ -1,13 +1,11 @@
-import os
 
 from dotenv import load_dotenv
-from google import genai
-from fastapi import HTTPException
-from pydantic import BaseModel
+from fastapi import FastAPI, HTTPException
+from pydantic import BaseModel, Field
+
+from app.services.openai_service import generate_ai_response
 
 load_dotenv()
-
-from fastapi import FastAPI
 
 # Create our FastAPI application
 app = FastAPI(
@@ -26,31 +24,25 @@ def health_check():
 
 
 class ChatRequest(BaseModel):
-    message: str
+    message: str = Field(min_length=1, max_length=2000)
 
 
+# OpenAI chat endpoint
 @app.post("/api/v1/ai/chat")
 def ai_chat(request: ChatRequest):
-    api_key = os.getenv("GEMINI_API_KEY")
+    try:
+        answer = generate_ai_response(request.message)
 
-    if not api_key:
+        return {"answer": answer}
+
+    except ValueError:
         raise HTTPException(
             status_code=503,
-            detail="Gemini API key is not configured"
+            detail="OpenAI API key is not configured"
         )
-
-    try:
-        client = genai.Client(api_key=api_key)
-
-        response = client.models.generate_content(
-            model=os.getenv("GEMINI_MODEL", "gemini-2.5-flash"),
-            contents=request.message
-        )
-
-        return {"answer": response.text}
 
     except Exception:
         raise HTTPException(
             status_code=502,
-            detail="Gemini request failed"
+            detail="OpenAI request failed"
         )
