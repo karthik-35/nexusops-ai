@@ -3,3 +3,5 @@ pytest
 httpx
 openai
 python-dotenv
+sqlalchemy
+psycopg[binary]

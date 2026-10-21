@@ -1,0 +1,26 @@
+
+services:
+  postgres:
+    image: pgvector/pgvector:pg17
+    container_name: nexusops-postgres
+    restart: unless-stopped
+
+    environment:
+      POSTGRES_USER: nexusops
+      POSTGRES_PASSWORD: nexusops_local_dev_only
+      POSTGRES_DB: nexusops
+
+    ports:
+      - "127.0.0.1:5433:5432"
+
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U nexusops -d nexusops"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  postgres_data:
