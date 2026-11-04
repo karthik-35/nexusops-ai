@@ -5,3 +5,4 @@ openai
 python-dotenv
 sqlalchemy
 psycopg[binary]
+langgraph==1.2.18
