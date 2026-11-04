@@ -4,6 +4,7 @@ from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
 from sqlalchemy import text
 from app.database import engine
+from app.agents.data_agent_service import ask_data_agent
 
 from app.services.openai_service import generate_ai_response
 
@@ -121,3 +122,14 @@ def get_tickets():
         ]
 
     return tickets
+
+@app.post("/api/v1/agents/data/chat")
+def data_agent_chat(request: ChatRequest):
+    try:
+        answer = ask_data_agent(request.message)
+        return {"answer": answer}
+    except Exception:
+        raise HTTPException(
+            status_code=502,
+            detail="Data Agent request failed"
+        )
