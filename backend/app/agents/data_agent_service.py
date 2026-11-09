@@ -58,7 +58,9 @@ def ask_data_agent(message: str) -> str:
 
     max_rounds = 5
 
-    for round_number in range(max_rounds):
+    # Inspect the response after the fifth tool round, too. A sixth batch of
+    # tools is rejected, but a final answer at that boundary is valid.
+    for round_number in range(max_rounds + 1):
         tool_calls = [
             item
             for item in response.output
@@ -68,11 +70,12 @@ def ask_data_agent(message: str) -> str:
         if not tool_calls:
             return response.output_text or "No answer was generated."
 
+        if round_number == max_rounds:
+            break
+
         tool_results = []
 
         for call in tool_calls:
-            print(f"AI selected tool: {call.name}")
-
             if call.name == "get_delayed_orders":
                 result = get_delayed_orders()
 

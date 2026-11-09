@@ -1,6 +1,8 @@
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
+import pytest
+
 from app.agents.data_agent_service import ask_data_agent
 
 
@@ -134,3 +136,39 @@ def test_agent_handles_multiple_rounds():
 
     assert calls[1].kwargs["previous_response_id"] == "response_1"
     assert calls[2].kwargs["previous_response_id"] == "response_2"
+
+
+def repeated_tool_response():
+    return SimpleNamespace(
+        id="response_boundary",
+        output=[SimpleNamespace(
+            type="function_call", name="get_delayed_orders", call_id="call_1"
+        )],
+        output_text="",
+    )
+
+
+def test_final_answer_after_fifth_tool_round_is_accepted():
+    client = MagicMock()
+    client.responses.create.side_effect = [
+        repeated_tool_response() for _ in range(5)
+    ] + [SimpleNamespace(output=[], output_text="Five rounds completed.")]
+    with (
+        patch("app.agents.data_agent_service.OpenAI", return_value=client),
+        patch("app.agents.data_agent_service.get_delayed_orders", return_value=[]),
+    ):
+        assert ask_data_agent("Which orders are delayed?") == "Five rounds completed."
+    assert client.responses.create.call_count == 6
+
+
+def test_sixth_tool_round_is_rejected_without_executing_tools():
+    client = MagicMock()
+    client.responses.create.return_value = repeated_tool_response()
+    with (
+        patch("app.agents.data_agent_service.OpenAI", return_value=client),
+        patch("app.agents.data_agent_service.get_delayed_orders", return_value=[]) as tool,
+        pytest.raises(RuntimeError, match="maximum number of tool rounds"),
+    ):
+        ask_data_agent("Which orders are delayed?")
+    assert client.responses.create.call_count == 6
+    assert tool.call_count == 5

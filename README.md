@@ -21,7 +21,7 @@ The platform is under active development, with the long-term goal of supporting 
 - **REST APIs:** Access business records and AI functionality through FastAPI.
 - **LangGraph workflow:** Execute the existing Data Agent through a graph-based workflow.
 - **Dockerized database:** Run PostgreSQL with pgvector locally.
-- **Automated testing:** 17 passing tests covering API behavior, database tool logic, and agent execution.
+- **Automated testing:** Tests covering API behavior, database tool logic, and agent execution.
 
 ### Planned
 
@@ -214,11 +214,9 @@ nexusops-ai/
 ### 1. Clone the repository
 
 ```bash
-git clone <YOUR_REPOSITORY_URL>
+git clone https://github.com/karthik-35/nexusops-ai.git
 cd nexusops-ai
 ```
-
-Replace `<YOUR_REPOSITORY_URL>` with the repository's GitHub URL.
 
 ### 2. Set up Python
 
@@ -229,23 +227,22 @@ python3.12 -m venv .venv
 source .venv/bin/activate
 
 pip install -r requirements.txt
-pip install langgraph
 ```
 
-LangGraph is installed separately here because the dependency file may not yet include it.
+LangGraph is included. Direct dependencies are pinned to the verified development environment.
 
 ### 3. Configure environment variables
 
-Create `backend/.env`:
+If `backend/.env` already exists, preserve it. Otherwise copy `backend/.env.example` and replace its placeholders:
 
 ```env
 OPENAI_API_KEY=your_openai_api_key
 OPENAI_MODEL=gpt-4.1-mini
 
-DATABASE_URL=postgresql+psycopg://nexusops:nexusops_local_dev_only@127.0.0.1:5433/nexusops
+DATABASE_URL=postgresql+psycopg://nexusops:replace-with-local-database-password@127.0.0.1:5433/nexusops
 ```
 
-These database credentials are intended only for the local development environment.
+Use the password for your existing local database. The example does not contain usable credentials.
 
 **Never commit `.env` or real API keys to GitHub.**
 
@@ -265,7 +262,7 @@ The database is accessible locally on port `5433`.
 
 ### 5. Initialize the database
 
-For a fresh database, run:
+For a **fresh database only**, run (preserve an existing database):
 
 ```bash
 docker compose exec -T postgres \
@@ -338,7 +335,13 @@ Example response:
 
 ## Testing
 
-Run the automated test suite:
+Run from the repository root:
+
+```bash
+backend/.venv/bin/python -m pytest -q
+```
+
+Or run from `backend/`:
 
 ```bash
 cd backend
@@ -349,7 +352,7 @@ python -m pytest -q
 Latest verified result during development:
 
 ```text
-17 passed
+19 passed
 ```
 
 Tests cover:
@@ -362,7 +365,7 @@ Tests cover:
 - Multiple tool calls
 - Multi-round agent execution
 
-Most tests use mocks to avoid requiring live OpenAI calls or database connections. Successful unit tests do not replace integration, security, or production testing.
+The unit suite uses mocks and blocks unmocked OpenAI and database access. It ignores local `.env` credentials. Successful unit tests do not replace integration, security, or production testing.
 
 ## Testing the Data Agent Manually
 
@@ -400,6 +403,8 @@ The current implementation is intended for local development and demonstrations.
 Before public deployment, the platform needs authentication, authorization, tenant isolation, rate limiting, secret management, audit logging, and stronger error handling.
 
 Do not expose the existing database APIs publicly or use real customer data until appropriate security controls are implemented.
+
+See [the repository audit](docs/repository-audit.md) for verified baseline findings and remaining risks.
 
 ## Development Roadmap
 

@@ -1,8 +1,9 @@
-fastapi[standard]
-pytest
-httpx
-openai
-python-dotenv
-sqlalchemy
-psycopg[binary]
+fastapi[standard]==0.143.0
+pydantic==2.14.1
+pytest==9.1.1
+httpx==0.28.1
+openai==3.31.0
+python-dotenv==1.2.4
+sqlalchemy==2.1.4
+psycopg[binary]==3.3.6
 langgraph==1.2.18
