@@ -40,3 +40,14 @@ README were inspected. Local secrets were not printed or modified.
 - No public deployment, database reset, real email, or refund execution is authorized.
 - Next: implement Supervisor routing, typed state, capability availability, limits,
   sanitized failures, API integration, and deterministic tests.
+
+## Follow-up verification
+
+The Supervisor milestone is implemented and documented in [supervisor.md](supervisor.md).
+Docker Desktop was subsequently started. PostgreSQL reports healthy with one row
+in each original business table and pgvector 0.8.7 enabled. The Alembic baseline
+was applied with every existing row verified unchanged. Eleven integration tests
+passed against temporary PostgreSQL schemas, including a real database-tool path
+through the Supervisor; OpenAI remained mocked. See
+[database-migrations.md](database-migrations.md) for commands and outstanding
+Milestone 2 work.

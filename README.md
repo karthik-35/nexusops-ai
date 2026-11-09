@@ -23,6 +23,7 @@ The platform is under active development, with the long-term goal of supporting 
 - **Honest partial workflows:** Execute available data work while reporting Research and Action as unavailable.
 - **Bounded execution:** Validate tool calls, cap agent steps and model output, and return sanitized failures.
 - **Dockerized database:** Run PostgreSQL with pgvector locally.
+- **Safe migration baseline:** Alembic creates fresh tables or validates and adopts existing tables while preserving records.
 - **Automated testing:** Tests covering API behavior, database tool logic, and agent execution.
 
 ### Planned
@@ -83,7 +84,7 @@ The Supervisor now identifies all three steps and executes the Data Agent. It re
 | Agent orchestration | LangGraph |
 | Database | PostgreSQL 17 |
 | Vector database | pgvector (enabled; retrieval features planned) |
-| Database access | SQLAlchemy, Psycopg |
+| Database access | SQLAlchemy, Psycopg, Alembic |
 | Infrastructure | Docker, Docker Compose |
 | Testing | Pytest, FastAPI TestClient, unittest.mock |
 | Planned frontend | Next.js, React, TypeScript |
@@ -246,25 +247,26 @@ The PostgreSQL container should report a healthy status.
 
 The database is accessible locally on port `5433`.
 
-### 5. Initialize the database
+### 5. Apply database migrations
 
-For a **fresh database only**, run (preserve an existing database):
+From the repository root:
 
 ```bash
-docker compose exec -T postgres \
-  psql -U nexusops -d nexusops \
-  < backend/database/schema.sql
+backend/.venv/bin/python -m alembic -c backend/alembic.ini upgrade head
 ```
 
-Load the sample data:
+The baseline supports both a fresh database and the existing tables. It validates
+existing structure and preserves all records. Do not drop or reset your database.
+See [migration documentation](docs/database-migrations.md) for adoption behavior,
+integration tests, and future schema changes.
+
+For a **fresh database only**, load the synthetic sample data:
 
 ```bash
 docker compose exec -T postgres \
   psql -U nexusops -d nexusops \
   < backend/database/seed.sql
 ```
-
-The sample data includes fictional customers, orders, and support tickets.
 
 ### 6. Run FastAPI
 
@@ -359,7 +361,7 @@ python -m pytest -q
 Verified result after the Supervisor milestone:
 
 ```text
-85 passed
+86 passed
 ```
 
 Tests cover:
@@ -376,7 +378,16 @@ Tests cover:
 - Supervisor API, state isolation, sanitized errors, and execution bounds
 - Full API → graph → Data Agent → SQL tool path with mocked external services
 
-The unit suite uses mocks and blocks unmocked OpenAI and database access. It ignores local `.env` credentials. Successful unit tests do not replace live integration, security, or production testing. Docker was stopped during this audit; no live database or OpenAI requests were used to validate this milestone.
+The unit suite uses mocks and blocks unmocked OpenAI and database access. It ignores local `.env` credentials. Successful unit tests do not replace live integration, security, or production testing. After starting Docker, 11 additional PostgreSQL integration tests passed in isolated schemas, including the Supervisor-to-database path. OpenAI calls remain mocked; no live model behavior was evaluated.
+
+Run optional PostgreSQL integration tests separately:
+
+```bash
+NEXUSOPS_RUN_DB_TESTS=1 backend/.venv/bin/python -m pytest backend/integration_tests -q --tb=short
+```
+
+They use temporary schemas and roll back their own changes. See the
+[migration guide](docs/database-migrations.md) for details.
 
 ## Testing the Data Agent Manually
 
@@ -429,7 +440,8 @@ See [the repository audit](docs/repository-audit.md) for verified baseline findi
 - [x] Automated tests
 - [x] Basic LangGraph workflow
 - [x] Intelligent Supervisor routing with observable partial workflows
-- [ ] Migrations, realistic synthetic data, pagination, and scoped queries
+- [x] Non-destructive Alembic baseline and PostgreSQL integration tests
+- [ ] Organization migrations, realistic synthetic data, pagination, and scoped queries
 - [ ] Authentication, roles, and organization isolation
 - [ ] Research Agent with RAG
 - [ ] pgvector semantic document search
