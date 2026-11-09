@@ -19,13 +19,14 @@ The platform is under active development, with the long-term goal of supporting 
 - **Multi-tool execution:** Combine information from multiple database tools in one response.
 - **Multi-step tool calling:** Support multiple rounds of AI tool requests, with a maximum of five tool-execution rounds.
 - **REST APIs:** Access business records and AI functionality through FastAPI.
-- **LangGraph workflow:** Execute the existing Data Agent through a graph-based workflow.
+- **LangGraph Supervisor:** Route clear requests without an extra model call, classify ambiguous business requests once, and track structured agent results.
+- **Honest partial workflows:** Execute available data work while reporting Research and Action as unavailable.
+- **Bounded execution:** Validate tool calls, cap agent steps and model output, and return sanitized failures.
 - **Dockerized database:** Run PostgreSQL with pgvector locally.
 - **Automated testing:** Tests covering API behavior, database tool logic, and agent execution.
 
 ### Planned
 
-- Intelligent Supervisor Agent for routing requests between specialized agents
 - Research Agent with retrieval-augmented generation (RAG)
 - Document ingestion, embeddings, semantic search, and citations
 - Action Agent for drafting business communications and proposing operational changes
@@ -71,7 +72,7 @@ User:
 
 > Find customers with delayed orders, review our refund policy, and prepare apology emails.
 
-The planned Supervisor will coordinate the Data, Research, and Action agents. Customer communications will require approval before sending.
+The Supervisor now identifies all three steps and executes the Data Agent. It returns `partial`, explicitly reporting document retrieval and email drafting as unavailable. Full policy retrieval, draft creation, and approvals remain planned.
 
 ## Technology Stack
 
@@ -91,45 +92,26 @@ The planned Supervisor will coordinate the Data, Research, and Action agents. Cu
 
 Current workflow:
 
-```text
-User
-  |
-  v
-FastAPI / Python
-  |
-  v
-OpenAI
-  |
-  v
-Tool Selection
-  |
-  +---- get_delayed_orders()
-  |
-  +---- get_open_support_tickets()
-  |
-  v
-PostgreSQL
-  |
-  v
-OpenAI generates response
-  |
-  v
-User receives answer
+```mermaid
+flowchart TD
+    U[Employee request] --> API[FastAPI validation]
+    API --> R[Supervisor router]
+    R -->|Clear intent| P[Validated task plan]
+    R -->|Ambiguous business question| M[One structured classification call]
+    M --> P
+    P --> G[Bounded LangGraph execution]
+    G --> D[Existing Data Agent]
+    D --> T[Predefined read-only tools]
+    T --> DB[(PostgreSQL)]
+    G --> N[Report unavailable Research / Action steps]
+    D --> F[Answer, status, results, execution events]
+    N --> F
 ```
 
-A basic LangGraph workflow is also available:
-
-```text
-START
-  |
-  v
-Data Agent
-  |
-  v
-END
-```
-
-The current LangGraph workflow does not yet perform intelligent routing between multiple agents.
+LangGraph coordinates the workflow's state and conditional transitions. The
+Data Agent continues to use OpenAI function calling to select its existing SQL
+tools. No arbitrary model-generated SQL is executed. See the
+[Supervisor design](docs/supervisor.md) for routing, limits, and extension points.
 
 ### Target Architecture
 
@@ -175,11 +157,13 @@ nexusops-ai/
 |   |   |   |-- data_agent.py
 |   |   |   |-- data_agent_service.py
 |   |   |   |-- supervisor.py
-|   |   |   `-- research_agent.py (placeholder, if created)
+|   |   |   `-- routing.py
 |   |   |
 |   |   |-- services/
 |   |   |   `-- openai_service.py
 |   |   |
+|   |   |-- api/supervisor.py
+|   |   |-- schemas.py
 |   |   |-- database.py
 |   |   `-- main.py
 |   |
@@ -198,6 +182,8 @@ nexusops-ai/
 |   |-- requirements.txt
 |   `-- .env (local only; not committed)
 |
+|-- docs/
+|-- pytest.ini
 |-- docker-compose.yml
 `-- README.md
 ```
@@ -310,7 +296,8 @@ Then open http://127.0.0.1:8001/docs.
 | GET | `/api/v1/customers` | Retrieve customers |
 | GET | `/api/v1/orders` | Retrieve orders |
 | GET | `/api/v1/tickets` | Retrieve support tickets |
-| POST | `/api/v1/agents/data/chat` | Ask the Data Agent a question |
+| POST | `/api/v1/agents/data/chat` | Ask the Data Agent a question (compatible existing API) |
+| POST | `/api/v1/agents/supervisor/chat` | Route a request and return a structured workflow trace |
 
 ### Example Data Agent Request
 
@@ -333,6 +320,26 @@ Example response:
 }
 ```
 
+### Example Supervisor Request
+
+```bash
+curl http://127.0.0.1:8000/api/v1/agents/supervisor/chat \
+  -H 'Content-Type: application/json' \
+  -d '{"message":"Find customers with delayed orders, check the refund policy, and prepare apology emails."}'
+```
+
+With working OpenAI and PostgreSQL connections, this currently returns:
+
+- `status: "partial"`
+- A generated `workflow_id`, routing method, task plan, and ordered events
+- Data Agent results from the database
+- Explicit `unavailable` results for Research and Action
+
+This describes the response shape; customer findings depend on the actual database.
+A policy-only request returns `unsupported` without querying customer data.
+Failures return HTTP 502 with sanitized details; invalid input returns HTTP 422.
+Workflow IDs and traces are returned for this request only and are not yet persisted.
+
 ## Testing
 
 Run from the repository root:
@@ -349,10 +356,10 @@ source .venv/bin/activate
 python -m pytest -q
 ```
 
-Latest verified result during development:
+Verified result after the Supervisor milestone:
 
 ```text
-19 passed
+85 passed
 ```
 
 Tests cover:
@@ -363,9 +370,13 @@ Tests cover:
 - Data Agent API validation and error handling
 - Database tool output processing
 - Multiple tool calls
-- Multi-round agent execution
+- Multi-round agent execution, including the fifth-round boundary
+- Deterministic routing evaluation fixtures and structured classifier behavior
+- Multi-intent plans, unavailable capabilities, and dependency failures
+- Supervisor API, state isolation, sanitized errors, and execution bounds
+- Full API → graph → Data Agent → SQL tool path with mocked external services
 
-The unit suite uses mocks and blocks unmocked OpenAI and database access. It ignores local `.env` credentials. Successful unit tests do not replace integration, security, or production testing.
+The unit suite uses mocks and blocks unmocked OpenAI and database access. It ignores local `.env` credentials. Successful unit tests do not replace live integration, security, or production testing. Docker was stopped during this audit; no live database or OpenAI requests were used to validate this milestone.
 
 ## Testing the Data Agent Manually
 
@@ -398,7 +409,7 @@ python -c "from app.agents.data_agent_service import ask_data_agent; print(ask_d
 
 NexusOps AI currently uses predefined, read-only SQL tools for AI-driven database retrieval. The AI does not execute arbitrary SQL statements.
 
-The current implementation is intended for local development and demonstrations.
+The current implementation is intended for local development with synthetic data. APIs are unauthenticated, queries are not tenant-scoped, and database retrieval is not yet bounded. Routing rules are not authorization controls.
 
 Before public deployment, the platform needs authentication, authorization, tenant isolation, rate limiting, secret management, audit logging, and stronger error handling.
 
@@ -417,14 +428,16 @@ See [the repository audit](docs/repository-audit.md) for verified baseline findi
 - [x] Multi-round tool execution
 - [x] Automated tests
 - [x] Basic LangGraph workflow
-- [ ] Intelligent Supervisor routing
+- [x] Intelligent Supervisor routing with observable partial workflows
+- [ ] Migrations, realistic synthetic data, pagination, and scoped queries
+- [ ] Authentication, roles, and organization isolation
 - [ ] Research Agent with RAG
 - [ ] pgvector semantic document search
 - [ ] Action Agent
 - [ ] Human approval workflows
 - [ ] Next.js frontend
-- [ ] Authentication and authorization
-- [ ] Monitoring and agent evaluations
+- [ ] Persistent workflow history and observability
+- [ ] Broader agent and retrieval evaluations
 - [ ] Deployment
 
 ## Project Goals

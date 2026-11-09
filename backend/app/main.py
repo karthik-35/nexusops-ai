@@ -1,12 +1,13 @@
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException
-from pydantic import BaseModel, Field
 from sqlalchemy import text
 from app.database import engine
 from app.agents.data_agent_service import ask_data_agent
 
 from app.services.openai_service import generate_ai_response
+from app.api.supervisor import router as supervisor_router
+from app.schemas import ChatRequest
 
 load_dotenv()
 
@@ -15,6 +16,7 @@ app = FastAPI(
     title="NexusOps AI",
     version="0.1.0"
 )
+app.include_router(supervisor_router)
 
 
 # Health check endpoint
@@ -24,10 +26,6 @@ def health_check():
         "status": "ok",
         "service": "nexusops-ai"
     }
-
-
-class ChatRequest(BaseModel):
-    message: str = Field(min_length=1, max_length=2000)
 
 
 # OpenAI chat endpoint
